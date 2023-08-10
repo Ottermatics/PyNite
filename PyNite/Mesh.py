@@ -1273,7 +1273,15 @@ class CylinderMesh(Mesh):
 
         radius = self.radius
         h = self.h
-        y = self.origin[1]
+
+        # Set the cylinder base's local y-coordinate
+        if self.axis == 'Y':
+            y = self.origin[1]  
+        elif self.axis == 'X':
+            y = self.origin[0]  
+        elif self.axis == 'Z':
+             y = self.origin[2]
+
         n = int(self.start_node[1:])
         q = int(self.start_element[1:])
 
