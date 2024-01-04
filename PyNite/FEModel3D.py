@@ -2,6 +2,7 @@
 from os import rename
 import warnings
 from math import isclose
+import collections
 
 from numpy import array, zeros, matmul, divide, subtract, atleast_2d
 from numpy.linalg import solve
@@ -24,6 +25,8 @@ class FEModel3D():
     """A 3D finite element model object. This object has methods and dictionaries to create, store,
        and retrieve results from a finite element model.
     """
+    _nodes_added: int = 0
+    tolerance: float = 0.001
 
     def __init__(self):
         """Creates a new 3D finite element model.
@@ -94,7 +97,7 @@ class FEModel3D():
         # Remove duplicates and return the list (sorted ascending)
         return sorted(list(dict.fromkeys(cases)))
 
-    def add_node(self, name, X, Y, Z):
+    def add_node(self, name, X, Y, Z,check_existing=False,tol=None):
         """Adds a new node to the model.
 
         :param name: A unique user-defined name for the node. If set to None or "" a name will be
@@ -106,21 +109,35 @@ class FEModel3D():
         :type Y: number
         :param Z: The node's global Z-coordinate.
         :type Z: number
+        :param check_existing: If set to True, the program will check if a node already exists at the coordinates within `tol` distance
+        :type check_existing: bool, optional, defaults to False
+        :param tol: The tolerance to use when checking for an existing node at the coordinates, defaults to 0.001
+        :type tol: float, optional
         :raises NameError: Occurs when the specified name already exists in the model.
         :return: The name of the node added to the model.
         :rtype: str
         """
-        
+        if tol is None: tol = self.tolerance
+
+        # Check if the node already exists
+        if check_existing:
+            result = self.search_nodes(X, Y, Z, distance=tol)
+            if result:
+                #print(f'found existing node {result[0]} @ {(X,Y,Z)}')
+                # If the node already exists, return its name
+                return result[0]
+
         # Name the node or check it doesn't already exist
         if name:
             if name in self.Nodes:
                 raise NameError(f"Node name '{name}' already exists")
         else:
             # As a guess, start with the length of the dictionary
-            name = "N" + str(len(self.Nodes))
+            start_value = max(len(self.Nodes),self._nodes_added+1)
+            name = "N" + str(start_value)
             count = 1
             while name in self.Nodes: 
-                name = "N" + str(len(self.Nodes) + count)
+                name = "N" + str(start_value+ count) 
                 count += 1
         
         # Create a new node
@@ -131,6 +148,7 @@ class FEModel3D():
         
         # Flag the model as unsolved
         self.solution = None
+        self._nodes_added += 1
 
         #Return the node name
         return name
@@ -724,34 +742,81 @@ class FEModel3D():
         
         #Return the mesh's name
         return name
+    
+    def NodeKDTree(self,recache=False)->KDTree:
+        """Creates a KDTree of the nodes in the model"""
 
-    def determine_proximal_nodes(self, tolerance=0.001):
+        # Check if the tree needs to be rebuilt
+        if recache is False and hasattr(self, 'kdtree') and self.kdtree is not None and self._tree_len == len(self.Nodes):
+            return self.kdtree
+
+        data = list([(v.X,v.Y,v.Z) for v in self.Nodes.values()])
+
+        #make the tree
+        if data:
+            self.kdtree = KDTree(data)
+            self._tree_len = len(data)
+            return self.kdtree
+        else:
+            return None
+
+    def determine_proximal_nodes(self, tolerance=None)->dict:
         """A method using a KD-Tree to efficiently determine nodes which are within a certain distance of each other"""
 
         #TODO: add nodes that are not in the FEA structure
         #TODO: add nodes that are in another structure + origin offset (for merging frames)
-        nodes = list(self.Nodes.keys())
-        data = list([(v.X,v.Y,v.Z) for v in self.Nodes.values()])
 
-        #make the tree
-        tree = KDTree(data)
+        if tolerance is None: tolerance = self.tolerance
+
         #find pairs within distance (exact)
-        indexes = tree.query_pairs(r=tolerance)
-        out = []
+        tree = self.NodeKDTree()
+        if tree is None:
+            return {}        
+        nodes = list(self.Nodes.keys())
+        sd = tree.sparse_distance_matrix(tree,tolerance)
+
+        #data tracking
+        reassigned = set()
+        outputs = collections.defaultdict(list)
+
+        #Collect points to reassign to previously defined points
+        for (k1,k2),tol in sd.items():
+            if k2 not in reassigned and k2 not in outputs and k1!=k2:
+                outputs[k1].append(k2)
+                reassigned.add(k2)
+        
         #get the mode names
-        for i, j in indexes:
-            out.append((nodes[i], nodes[j]))
+        for k,v in outputs.items():
+            outputs[k] = [nodes[i] for i in v]
+        return {nodes[ni]:nodz for ni,nodz in outputs.items()}
+    
+    def search_nodes(self, x, y, z, distance=1)->list:
+        """Searches for nodes within a certain distance of a given point"""
+        tree = self.NodeKDTree()
+        if tree is None:
+            return []
+        res = tree.query_ball_point([(x,y,z)],distance)
+        nodes = list(self.Nodes.keys())
+        out = []
+        for r in res:
+            if isinstance(r,(list,tuple)):
+                for ri in r:
+                    out.append(nodes[ri])
+            else:
+                out.append(nodes[r])
         return out
 
+    def merge_duplicate_nodes(self, tolerance=None):
 
-    def merge_duplicate_nodes(self, tolerance=0.001):
         """Removes duplicate nodes from the model and returns a list of the removed node names.
 
         :param tolerance: The maximum distance between two nodes in order to consider them
                           duplicates. Defaults to 0.001.
         :type tolerance: float, optional
         """
+        if tolerance is None: tolerance = self.tolerance
 
+        # Make a list of nodes to be removed from the model
         # Initialize a dictionary marking where each node is used
         node_lookup = {node_name: [] for node_name in self.Nodes.keys()}
         element_dicts = ('Springs', 'Members', 'Plates', 'Quads')
@@ -775,85 +840,75 @@ class FEModel3D():
                         # Add the element to the list of elements attached to the node
                         node_lookup[node.name].append((element, node_type))
 
-        # Make a list of the names of each node in the model
-        node_names = list(self.Nodes.keys())
+        to_remove = {}
 
-        # Make a list of nodes to be removed from the model
-        remove_list = []
+        node_matches = self.determine_proximal_nodes(tolerance)
 
-        # Step through each node in the copy of the `Nodes` dictionary
-        for i, node_1_name in enumerate(node_names):
-
-            # Skip iteration if `node_1` has already been removed
-            if node_lookup[node_1_name] is None:
-                continue
-
-            #Check combinations. There is no need to check `node_1` against itself
-            for node_2_name in node_names[i + 1:]:
-
-                # Skip iteration if node_2 has already been removed
-                if node_lookup[node_2_name] is None:
-                    continue
-
-                # Calculate the distance between nodes
-                n2 = self.Nodes[node_2_name]
-                n1 = self.Nodes[node_1_name]
-                if n1.distance(n2) > tolerance:
-                    continue
-
-                # Replace references to `node_2` in each element with references to `node_1`
-                for element, node_type in node_lookup[node_2_name]:
-                    setattr(element, node_type, n1)
-
-                # Flag `node_2` as no longer used
-                node_lookup[node_2_name] = None
-
-                # Merge any boundary conditions
-                support_cond = ('support_DX', 'support_DY', 'support_DZ', 'support_RX', 'support_RY', 'support_RZ')
-                for dof in support_cond:
-                    if getattr(n2, dof) == True:
-                        setattr(n1, dof, True)
-                
-                # Merge any spring supports
-                spring_cond = ('spring_DX', 'spring_DY', 'spring_DZ', 'spring_RX', 'spring_RY', 'spring_RZ')
-                for dof in spring_cond:
-                    value = getattr(n2, dof)
-                    if value != [None, None, None]:
-                        setattr(n1, dof, value)
-                
-                # Fix the mesh labels
-                for mesh in self.Meshes.values():
-
-                    # Fix the nodes in the mesh
-                    if node_2_name in mesh.nodes.keys():
-
-                        # Attach the correct node to the mesh
-                        mesh.nodes[node_2_name] = n1
-
-                        # Fix the dictionary key
-                        #print(f'{mesh} rmv {node_2_name} -> {node_1_name}')
-                        mesh.nodes[node_1_name] = mesh.nodes.pop(node_2_name)
-
-                    # Fix the elements in the mesh
-                    for element in mesh.elements.values():
-                        if node_2_name == element.i_node.name: 
-                            element.i_node = n1
-                        if node_2_name == element.j_node.name: 
-                            element.j_node = n1
-                        if node_2_name == element.m_node.name: 
-                            element.m_node = n1
-                        if node_2_name == element.n_node.name: 
-                            element.n_node = n1
-                    
-                # Add the node to the `remove` list
-                remove_list.append(node_2_name)
+        for good_node,replace_nodes in node_matches.items():
+            for replace_node in replace_nodes:
+                self.replace_node(replace_node,good_node,node_lookup=node_lookup)
+                to_remove[replace_node] = good_node
 
         # Remove `node_2` from the model's `Nodes` dictionary
-        for node_name in remove_list:
-            self.Nodes.pop(node_name)
-        
+        for rmv_node,new_node in to_remove.items():
+            old_node = self.Nodes.pop(rmv_node) #byyyye
+
         # Flag the model as unsolved
         self.solution = None
+        
+
+    def replace_node(self,replace_node,base_node,patch_node=True,keep_support=True,keep_springs=True,node_lookup=None):
+        # Calculate the distance between nodes
+        n2 = self.Nodes[replace_node]
+        n1 = self.Nodes[base_node]
+
+        # Merge any boundary conditions
+        if keep_support:
+            support_cond = ('support_DX', 'support_DY', 'support_DZ', 'support_RX', 'support_RY', 'support_RZ')
+            for dof in support_cond:
+                if getattr(n2, dof) == True:
+                    setattr(n1, dof, True)
+        
+        # Merge any spring supports
+        if keep_springs:
+            spring_cond = ('spring_DX', 'spring_DY', 'spring_DZ', 'spring_RX', 'spring_RY', 'spring_RZ')
+            for dof in spring_cond:
+                value = getattr(n2, dof)
+                if value != [None, None, None]:
+                    setattr(n1, dof, value)
+        
+        # Fix the mesh labels
+        for mesh in self.Meshes.values():
+
+            # Fix the nodes in the mesh
+            if replace_node in mesh.nodes.keys():
+
+                # Attach the correct node to the mesh
+                mesh.nodes[replace_node] = n1
+
+                # Fix the dictionary key
+                #print(f'{mesh} rmv {replace_node} -> {base_node}')
+                mesh.nodes[base_node] = mesh.nodes.pop(replace_node)
+
+            # Fix the elements in the mesh
+            for element in mesh.elements.values():
+                if replace_node == element.i_node.name: 
+                    element.i_node = n1
+                if replace_node == element.j_node.name: 
+                    element.j_node = n1
+                if replace_node == element.m_node.name: 
+                    element.m_node = n1
+                if replace_node == element.n_node.name: 
+                    element.n_node = n1    
+
+        #replace old node contents for any external references still holding onto it
+        if patch_node:
+            n2.__dict__.update(n1.__dict__.copy())
+
+        #Replace references to `replace_node` in each element with references to `base_ndoe`
+        if node_lookup:
+            for element, node_type in node_lookup[replace_node]:
+                    setattr(element, node_type, n1)
 
     def delete_node(self, node_name):
         """Removes a node from the model. All nodal loads associated with the node and elements attached to the node will also be removed.

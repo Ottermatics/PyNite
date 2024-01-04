@@ -74,3 +74,13 @@ class Node3D():
             A node object to compare coordinates with.
         """
         return ((self.X - other.X)**2 + (self.Y - other.Y)**2 + (self.Z - other.Z)**2)**0.5
+    
+    def __str__(self) -> str:
+        """
+        Returns a string representation of the node.
+        """
+        return 'Node[{self.name:^10}]X:{self.X: .3f} Y:{self.Y: .3f} Z:{self.Z: .3f}'.format(self=self)
+    
+    def __hash__(self):
+        """returns a hash of the name for dictionary lookup purposes"""
+        return hash(self.name)

@@ -360,6 +360,25 @@ class Mesh():
         # Return the smallest value encountered from all the elements
         return M_min
     
+    def assign_nodes_to_model(self):
+        """
+        Adds the mesh's nodes to the model, preserving any existing nodes
+        """
+
+        # Add the nodes to the model
+        for node in self.nodes.values():
+            self.assign_or_remap_node(node)
+
+    def assign_or_remap_node(self,node):
+        """checks it node is already in model, if so remaps elements to model node"""
+        out_name = self.model.search_nodes(node.X,node.Y,node.Z, distance=self.model.tolerance)
+
+        if out_name and out_name[0] != node.name:
+            print(f'mesh {self} has existing node: {node.name} {out_name}')
+        elif node.name not in self.model.Nodes:
+            print(f'node {node.name} not in model, adding it')
+            self.model.Nodes[node.name] = node
+
 #%%
 class RectangleMesh(Mesh):
 
@@ -469,9 +488,6 @@ class RectangleMesh(Mesh):
         unique_list.append(y_control[-1])
         y_control = unique_list
     
-        # Each node number will be increased by the offset calculated below
-        node_offset = int(self.start_node[1:]) - 1
-
         # Each element number will be increased by the offset calculated below
         element_offset = int(self.start_element[1:]) - 1
 
@@ -490,6 +506,7 @@ class RectangleMesh(Mesh):
         num_rows = 0
         num_cols = 0
         y, h = 0, None
+        nodes = {}
         for j in range(1, len(y_control), 1):
             
             # If this is not the first iteration 'y' will be too high at this point.
@@ -503,7 +520,7 @@ class RectangleMesh(Mesh):
             # Adjust 'y' if this is not the first iteration.
             if j != 1:
                 y += h
-
+            
             # Generate nodes between the y control points
             while round(y, 10) <= round(y_control[j], 10):
                 
@@ -532,9 +549,6 @@ class RectangleMesh(Mesh):
                         if y == 0:
                             num_cols += 1
 
-                        # Assign the node a name
-                        node_name = 'N' + str(node_num + node_offset)
-
                         # Calculate the node's coordinates
                         if plane == 'XY':
                             X = Xo + x
@@ -551,14 +565,17 @@ class RectangleMesh(Mesh):
                         else:
                             raise Exception('Invalid plane selected for RectangleMesh.')
 
-                        # Add the node to the mesh
-                        self.nodes[node_name] = Node3D(node_name, X, Y, Z)
-
+                        # Add the node to the mesh safely
+                        node_name = self.model.add_node(None, X, Y, Z,check_existing=True,tol=self.model.tolerance)
+                        node = self.model.Nodes[node_name]
+                        self.nodes[node_name] = node
+                        
                         # Move to the next x coordinate
                         x += b
 
                         # Move to the next node number
                         node_num += 1
+                        nodes[node_num] = node_name
 
                 # Move to the next y coordinate
                 y += h
@@ -587,19 +604,25 @@ class RectangleMesh(Mesh):
                 r += 1
             
             n += 1
+
+            i_node = nodes[i_node]
+            j_node = nodes[j_node]
+            m_node = nodes[m_node]
+            n_node = nodes[n_node]
             
             if element_type == 'Quad':
-                self.elements[element_name] = Quad3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                                   self.nodes['N' + str(j_node + node_offset)],
-                                                                   self.nodes['N' + str(m_node + node_offset)],
-                                                                   self.nodes['N' + str(n_node + node_offset)],
-                                                                   self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                q = Quad3D(element_name, self.nodes[i_node],
+                                        self.nodes[j_node],
+                                        self.nodes[m_node],
+                                        self.nodes[n_node],
+                                        self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
             else:
-                self.elements[element_name] = Plate3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                                    self.nodes['N' + str(j_node + node_offset)],
-                                                                    self.nodes['N' + str(m_node + node_offset)],
-                                                                    self.nodes['N' + str(n_node + node_offset)],
-                                                                    self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                q = Plate3D(element_name, self.nodes[i_node],
+                                        self.nodes[j_node],
+                                        self.nodes[m_node],
+                                        self.nodes[n_node],
+                                        self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+            self.elements[element_name] = q
 
         # Initialize a list of nodes and associated elements that fall within opening boundaries
         # that will be deleted
@@ -651,6 +674,8 @@ class RectangleMesh(Mesh):
         # Delete the nodes marked for deletion
         for node_name in node_del_list:
             del self.nodes[node_name]
+            #since nodes are added via add_node they must be removed from model
+            self.model.Nodes.pop(node_name,None)
         
         # Find any remaining orphaned nodes around the perimeter of the mesh
         node_del_list = []
@@ -774,11 +799,16 @@ def determine_angle_offset(mesh:Mesh,axis,reassign=True):
 
         sn = mesh.model.Nodes[mesh.start_node]
         snvec = np.array([sn.X,sn.Y,sn.Z])
-        origin = np.array([mesh.Xo,mesh.Yo,mesh.Zo])
+        if hasattr(mesh,'origin'):
+            origin = mesh.origin
+        else:
+            origin = np.array([mesh.Xo,mesh.Yo,mesh.Zo])
+        #Relative vectors from origin
         rv = snvec - origin
+        #Create a reference vector of same magnitude
         R = np.sum(rv**2.)**0.5
         ov = np.array(origin_ref)*R
-        #relative vector from origin
+        #relative vector from origin (cross product definition)
         cp = np.linalg.norm(np.cross(rv,ov),2)
         angle_offset = np.arcsin(cp/R**2.)
         
@@ -886,8 +916,7 @@ class AnnulusMesh(Mesh):
             element.n_node = self.nodes[element.n_node.name]
 
         # Add the nodes to the model
-        for node in self.nodes.values():
-            self.model.Nodes[node.name] = node
+        self.assign_nodes_to_model()
         
         # Add the elements to the model
         for element in self.elements.values():
@@ -906,7 +935,7 @@ class AnnulusRingMesh(Mesh):
     """
 
     def __init__(self, outer_radius, inner_radius, num_quads, thickness, material, model, kx_mod=1, ky_mod=1,
-                 origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1'):
+                 origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1',angle_offset=None):
 
         super().__init__(thickness, material, model, kx_mod, ky_mod, start_node=start_node,
                          start_element=start_element)
@@ -919,6 +948,7 @@ class AnnulusRingMesh(Mesh):
         self.Zo = origin[2]
 
         self.axis = axis
+        self.angle_offset = angle_offset
 
         # Generate the nodes and elements
         self.generate()
@@ -940,24 +970,22 @@ class AnnulusRingMesh(Mesh):
 
 
         #autogenerated node conventional format
-        angle_offset = determine_angle_offset(self,axis)
+        #Have the angle match the start node
+        if self.angle_offset is None:
+            self.angle_offset = determine_angle_offset(self,axis)
 
-        # Each node number will be increased by the offset calculated below
-        node_offset = int(self.start_node[1:]) - 1
 
         # Each element number will be increased by the offset calculated below
         element_offset = int(self.start_element[1:]) - 1   
 
         angle = 0
         # Generate the nodes that make up the ring, working from the inside to the outside
+        nodes = {}
         for i in range(1, 2*n + 1, 1):
-
-            # Assign the node a name
-            node_name = 'N' + str(i + node_offset)
 
             # Generate the inner radius of nodes
             if i <= n:
-                angle = theta*(i - 1) + angle_offset
+                angle = theta*(i - 1) + self.angle_offset
                 if axis == 'Y':
                     x = Xo + inner_radius*cos(angle)
                     y = Yo
@@ -975,7 +1003,7 @@ class AnnulusRingMesh(Mesh):
             
             # Generate the outer radius of nodes
             else:
-                angle = theta*((i - n) - 1) + angle_offset
+                angle = theta*((i - n) - 1) + self.angle_offset
                 if axis == 'Y':
                     x = Xo + outer_radius*cos(angle)
                     y = Yo 
@@ -990,8 +1018,11 @@ class AnnulusRingMesh(Mesh):
                     z = Zo
                 else:
                     raise Exception('Invalid axis specified for AnnulusRingMesh.')
-            
-            self.nodes[node_name] = Node3D(node_name, x, y, z)
+            #Add the node safely
+            node_name = self.model.add_node(None, x, y, z,check_existing=True,tol=self.model.tolerance)
+            _node = self.model.Nodes[node_name]
+            self.nodes[node_name] = _node
+            nodes[i] = node_name
 
         # Generate the elements that make up the ring
         for i in range(1, n + 1, 1):
@@ -999,24 +1030,25 @@ class AnnulusRingMesh(Mesh):
             # Assign the element a name
             element_name = 'Q' + str(i + element_offset)
             
-            n_node = i
-            i_node = i + n
+            n_node = nodes[i]
+            i_node = nodes[i + n]
             if i != n:
-                m_node = i + 1
-                j_node = i + 1 + n
+                m_node = nodes[i + 1]
+                j_node = nodes[i + 1 + n]
             else:
-                m_node = 1
-                j_node = 1 + n
+                m_node = nodes[1]
+                j_node = nodes[1 + n]
 
-            self.elements[element_name] = Quad3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                               self.nodes['N' + str(j_node + node_offset)],
-                                                               self.nodes['N' + str(m_node + node_offset)],
-                                                               self.nodes['N' + str(n_node + node_offset)],
-                                                               self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+            q = Quad3D(element_name,self.nodes[i_node],
+                                    self.nodes[j_node],
+                                    self.nodes[m_node],
+                                    self.nodes[n_node],
+                                    self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+
+            self.elements[element_name] = q
 
         # Add the nodes and elements to the model
-        for node in self.nodes.values():
-            self.model.Nodes[node.name] = node
+        self.assign_nodes_to_model()
         
         # Add the elements to the model
         for element in self.elements.values():
@@ -1037,7 +1069,7 @@ class AnnulusTransRingMesh(Mesh):
 
     def __init__(self, outer_radius, inner_radius, num_inner_quads, thickness, material, model,
                  kx_mod=1, ky_mod=1, origin=[0, 0, 0], axis='Y', start_node='N1',
-                 start_element='Q1'):
+                 start_element='Q1',angle_offset=None):
         """
         Parameters
         ----------
@@ -1056,6 +1088,7 @@ class AnnulusTransRingMesh(Mesh):
         self.Yo = origin[1]
         self.Zo = origin[2]
         self.axis = axis
+        self.angle_offset = angle_offset
 
         # Create the mesh
         self.generate()
@@ -1079,25 +1112,21 @@ class AnnulusTransRingMesh(Mesh):
         theta3 = 2*pi/(self.n*3)  # Angle between nodes at the outer radius of the ring
 
         #Have the angle match the start node
-        angle_offset = determine_angle_offset(self,axis)
+        if self.angle_offset is None:
+            self.angle_offset = determine_angle_offset(self,axis)
 
         #autogenerated node conventional format
-        # Each node number will be increased by the offset calculated below
-        node_offset = int(self.start_node[1:]) - 1
-
         # Each element number will be increased by the offset calculated below
         element_offset = int(self.start_element[1:]) - 1                
 
         # Generate the nodes that make up the ring, working from the inside to the outside
         angle = 0
+        nodes = {}
         for i in range(1, 6*n + 1, 1):
-
-            # Assign the node a name
-            node_name = 'N' + str(i + node_offset)
 
             # Generate the inner radius of nodes
             if i <= n:
-                angle = theta1*(i - 1) + angle_offset
+                angle = theta1*(i - 1) + self.angle_offset
                 if axis == 'Y':
                     x = Xo + inner_radius*cos(angle)
                     y = Yo
@@ -1116,7 +1145,7 @@ class AnnulusTransRingMesh(Mesh):
             # Generate the center radius of nodes
             elif i <= 3*n:
                 if (i - n) == 1:
-                    angle = theta2 +angle_offset
+                    angle = theta2 +self.angle_offset
                 elif (i - n) % 2 == 0:
                     angle += theta2
                 else:
@@ -1138,7 +1167,7 @@ class AnnulusTransRingMesh(Mesh):
                 if (i - 3*n) == 1:
                     angle = angle_offset
                 else:
-                    angle = theta3*((i - 3*n) - 1)+angle_offset
+                    angle = theta3*((i - 3*n) - 1)+self.angle_offset
                 if axis == 'Y':
                     x = Xo + r3*cos(angle)
                     y = Yo 
@@ -1154,7 +1183,11 @@ class AnnulusTransRingMesh(Mesh):
                 else:
                     raise Exception('Invalid axis specified for AnnulusTransRingMesh.')
             
-            self.nodes[node_name] = Node3D(node_name, x, y, z)
+            #Add the node safely
+            node_name = self.model.add_node(None, x, y, z,check_existing=True,tol=self.model.tolerance)
+            node = self.model.Nodes[node_name]
+            self.nodes[node_name] = node
+            nodes[i] = node_name
 
         # Generate the elements that make up the ring
         for i in range(1, 4*n + 1, 1):
@@ -1190,15 +1223,21 @@ class AnnulusTransRingMesh(Mesh):
                     m_node = 1
                     j_node = 1 + 3*n
 
-            self.elements[element_name] = Quad3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                               self.nodes['N' + str(j_node + node_offset)],
-                                                               self.nodes['N' + str(m_node + node_offset)],
-                                                               self.nodes['N' + str(n_node + node_offset)],
-                                                               self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+            i_node = nodes[i_node]
+            n_node = nodes[n_node]
+            m_node = nodes[m_node]
+            j_node = nodes[j_node] 
+
+            q = Quad3D(element_name, self.nodes[i_node],
+                                self.nodes[j_node],
+                                self.nodes[m_node],
+                                self.nodes[n_node],
+                                self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+
+            self.elements[element_name] = q
 
         # Add the nodes and elements to the model
-        for node in self.nodes.values():
-            self.model.Nodes[node.name] = node
+        self.assign_nodes_to_model()
         
         for element in self.elements.values():
             if element.type == 'Quad':
@@ -1290,7 +1329,7 @@ class CylinderMesh(Mesh):
         The type of element to use for the mesh: 'Quad' or 'Rect'
     """
 
-    def __init__(self, mesh_size, radius, height, thickness, material, model, kx_mod=1, ky_mod=1,origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1', num_elements=None, element_type='Quad'):
+    def __init__(self, mesh_size, radius, height, thickness, material, model, kx_mod=1, ky_mod=1,origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1', num_elements=None, element_type='Quad',angle_offset=None):
 
         # Inherit properties and methods from the parent `Mesh` class
         super().__init__(thickness, material, model, kx_mod, ky_mod, start_node, start_element)
@@ -1302,13 +1341,23 @@ class CylinderMesh(Mesh):
         self.origin = origin
         self.axis = axis
 
+        #Have the angle match the start node
+        if angle_offset is None:
+            self.angle_offset = determine_angle_offset(self,axis)
+        else:
+            self.angle_offset = self.angle_offset
+
         # Check if the user has requested a specific number of elements for each course of plates. This can be useful for ensuring the mesh matches up with other meshes.
-        if num_elements == None:
+        if num_elements is None:
             # Calculate the number of elements if the user hasn't specified
-            self.num_elements = int(round(2*pi*radius/mesh_size, 0))
+            self.num_elements = max(int(round(2*pi*radius/mesh_size, 0)),3)
         else:
             # Use the user specified number of elements
             self.num_elements = num_elements
+            if self.mesh_size is None:
+                # Calculate the mesh size if the user hasn't specified
+                self.mesh_size = 2*pi*radius/self.num_elements
+            
 
         # Check which type of element the user has requested (rectangular plate or quad)
         self.element_type = element_type
@@ -1335,16 +1384,12 @@ class CylinderMesh(Mesh):
         elif self.axis == 'X':
             y = self.origin[0]  
         elif self.axis == 'Z':
-             y = self.origin[2]
+            y = self.origin[2]
 
         n = int(self.start_node[1:])
         q = int(self.start_element[1:])
 
         element_type = self.element_type
-
-        # Determine the number of quads to mesh the circumference into
-        if num_elements == None:
-            num_elements = int(2*pi/mesh_size)
 
         # Mesh the cylinder from the bottom toward the top
         while round(y, 10) < round(h, 10):
@@ -1355,11 +1400,11 @@ class CylinderMesh(Mesh):
             h_y = height/n_vert             # Element height in the vertical direction
             # Create a mesh of nodes for the ring
             if self.axis == 'Y':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, y, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, y, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
             elif self.axis == 'X':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [y, 0, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [y, 0, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
             elif self.axis == 'Z':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, 0, y], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, 0, y], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
 
             n += num_elements
             q += num_elements
@@ -1379,8 +1424,7 @@ class CylinderMesh(Mesh):
             element.n_node = self.nodes[element.n_node.name]
 
         # Add the nodes and elements to the model
-        for node in self.nodes.values():
-            self.model.Nodes[node.name] = node
+        self.assign_nodes_to_model()
         
         for element in self.elements.values():
             if element.type == 'Quad':
@@ -1433,7 +1477,7 @@ class CylinderRingMesh(Mesh):
 
     def __init__(self, radius, height, num_elements, thickness, material, model, kx_mod=1, ky_mod=1,
                  origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1',
-                 element_type='Quad'):
+                 element_type='Quad',angle_offset=None):
 
         super().__init__(thickness, material, model, kx_mod, ky_mod, start_node=start_node, start_element=start_element)
 
@@ -1445,6 +1489,7 @@ class CylinderRingMesh(Mesh):
         self.Zo = origin[2]
         self.axis = axis
         self.element_type = element_type
+        self.angle_offset = angle_offset
 
         # Generate the nodes and elements
         self.generate()
@@ -1471,24 +1516,24 @@ class CylinderRingMesh(Mesh):
 
 
         #Have the angle match the start node
-        angle_offset = determine_angle_offset(self,axis)
+        if self.angle_offset is None:
+            self.angle_offset = determine_angle_offset(self,axis)
+        else:
+            self.angle_offset = self.angle_offset
 
         #autogenerated node conventional format
-        # Each node number will be increased by the offset calculated below
-        node_offset = int(self.start_node[1:]) - 1
 
         # Each element number will be increased by the offset calculated below
         element_offset = int(self.start_element[1:]) - 1   
 
         angle = 0
+        nodes = {}
         for i in range(1, 2*n + 1, 1):
 
-            # Assign the node a name
-            node_name = 'N' + str(i + node_offset)
 
             # Generate the bottom nodes of the ring
             if i <= n:
-                angle = theta*(i - 1) + angle_offset
+                angle = theta*(i - 1) + self.angle_offset
                 if axis == 'Y':
                     x = Xo + radius*cos(angle)
                     y = Yo
@@ -1506,7 +1551,7 @@ class CylinderRingMesh(Mesh):
 
             # Generate the top nodes of the ring
             else:
-                angle = theta*((i - n) - 1) + angle_offset
+                angle = theta*((i - n) - 1) + self.angle_offset
                 if axis == 'Y':
                     x = Xo + radius*cos(angle)
                     y = Yo + height
@@ -1522,7 +1567,11 @@ class CylinderRingMesh(Mesh):
                 else:
                     raise Exception('Invalid axis specified for CylinderRingMesh.')
             
-            self.nodes[node_name] = Node3D(node_name, x, y, z)
+            # Add the node to the mesh safely
+            node_name = self.model.add_node(None, x, y, z,check_existing=True,tol=self.model.tolerance)
+            node = self.model.Nodes[node_name]
+            self.nodes[node_name] = node
+            nodes[i] = node_name
 
         # Generate the elements that make up the ring
         for i in range(1, n + 1, 1):
@@ -1544,24 +1593,31 @@ class CylinderRingMesh(Mesh):
             else:
                 m_node = 1
                 j_node = 1 + n
+            
+            #index space to namespace
+            i_node = nodes[i_node]
+            j_node = nodes[j_node]
+            m_node = nodes[m_node]
+            n_node = nodes[n_node]
 
             # Create the element and add it to the `elements` dictionary
             if self.element_type == 'Quad':
-                self.elements[element_name] = Quad3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                     self.nodes['N' + str(j_node + node_offset)],
-                                                     self.nodes['N' + str(m_node + node_offset)],
-                                                     self.nodes['N' + str(n_node + node_offset)],
-                                                     self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                q = Quad3D(element_name, self.nodes[i_node],
+                            self.nodes[j_node],
+                            self.nodes[m_node],
+                            self.nodes[n_node],
+                            self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
             elif self.element_type == 'Rect':
-                self.elements[element_name] = Plate3D(element_name, self.nodes['N' + str(i_node + node_offset)],
-                                                      self.nodes['N' + str(j_node + node_offset)],
-                                                      self.nodes['N' + str(m_node + node_offset)],
-                                                      self.nodes['N' + str(n_node + node_offset)],
-                                                      self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                q = Plate3D(element_name, self.nodes[i_node],
+                            self.nodes[j_node],
+                            self.nodes[m_node],
+                            self.nodes[n_node],
+                            self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+            #Add the element to the mesh
+            self.elements[element_name] = q
         
         # Add the nodes and elements to the model
-        for node in self.nodes.values():
-            self.model.Nodes[node.name] = node
+        self.assign_nodes_to_model()
         
         for element in self.elements.values():
             if element.type == 'Quad':
@@ -1648,7 +1704,7 @@ def check_mesh_integrity(mesh, console_log=True):
     # Check that each element in the mesh is in the model
     count = 0
     for element in mesh.elements.values():
-        if element not in mesh.model.Plates.values() and element.name not in mesh.model.Quads.values():
+        if element not in mesh.model.Plates.values() and element.name not in mesh.model.Quads.keys():
             count += 1
     
     if count != 0:
