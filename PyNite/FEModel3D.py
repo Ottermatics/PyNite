@@ -5,9 +5,9 @@ from math import isclose
 import collections
 
 from numpy import array, zeros, matmul, divide, subtract, atleast_2d
-from numpy.linalg import solve
 from scipy.spatial import KDTree
 
+from PyNite.Solvers import solve
 from PyNite.Node3D import Node3D
 from PyNite.Material import Material
 from PyNite.Section import Section
@@ -1998,7 +1998,7 @@ class FEModel3D():
 
         # Import `scipy` features if the sparse solver is being used
         if sparse == True:
-            from scipy.sparse.linalg import spsolve
+            from PyNite.Solvers import spsolve
 
         # Prepare the model for analysis
         Analysis._prepare_model(self)
