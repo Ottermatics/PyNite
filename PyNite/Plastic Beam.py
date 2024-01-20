@@ -40,7 +40,7 @@ plastic_beam.add_load_combo('1.4D', {'D':1.4})
 plastic_beam.add_load_combo('Pushover', {'Push':0.01})
 
 # Analyze the model
-plastic_beam._not_ready_yet_analyze_pushover(log=True, check_stability=False, push_combo='Pushover', max_iter=30, sparse=True, combo_tags=None)
+plastic_beam._not_ready_yet_analyze_pushover(log=True, check_stability=False, push_combo='Pushover', max_iter=30, sparse=True, combo_tags=None,load_combos=None)
 
 # Plot the moment diagram
 # plastic_beam.Members['M1'].plot_shear('Fy', '1.4D')

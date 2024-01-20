@@ -1974,7 +1974,7 @@ class FEModel3D():
         # Return the global displacement vector
         return self._D[combo_name]
 
-    def analyze(self, log=False, check_stability=True, check_statics=False, max_iter=30, sparse=True, combo_tags:list=None,load_combos:list=None):
+    def analyze(self, log=False, check_stability=True, check_statics=False, max_iter=30, sparse=True, combo_tags:list=None,load_combos:list=None,reset_nodes=False):
         """Performs first-order static analysis. Iterations are performed if tension-only members or compression-only members are present.
 
         :param log: Prints the analysis log to the console if set to True. Default is False.
@@ -2001,7 +2001,8 @@ class FEModel3D():
             from PyNite.Solvers import spsolve
 
         # Prepare the model for analysis
-        Analysis._prepare_model(self)
+        reset_nodes = not any((combo_tags , load_combos)) or reset_nodes
+        Analysis._prepare_model(self,reset_nodes=reset_nodes)
 
         # Get the auxiliary list used to determine how the matrices will be partitioned
         D1_indices, D2_indices, D2 = Analysis._partition_D(self)
@@ -2077,7 +2078,7 @@ class FEModel3D():
                 iter_count += 1
 
         # Calculate reactions
-        Analysis._calc_reactions(self, log, combo_tags)
+        Analysis._calc_reactions(self, log, combo_tags,load_combos)
 
         if log:
             print('')     
@@ -2086,12 +2087,12 @@ class FEModel3D():
 
         # Check statics if requested
         if check_statics == True:
-            Analysis._check_statics(self, combo_tags)
+            Analysis._check_statics(self, combo_tags,load_combos)
         
         # Flag the model as solved
         self.solution = 'Linear TC'
 
-    def analyze_linear(self, log=False, check_stability=True, check_statics=False, sparse=True, combo_tags:list=None,load_combos:list=None):
+    def analyze_linear(self, log=False, check_stability=True, check_statics=False, sparse=True, combo_tags:list=None,load_combos:list=None,reset_nodes=False):
         """Performs first-order static analysis. This analysis procedure is much faster since it only assembles the global stiffness matrix once, rather than once for each load combination. It is not appropriate when non-linear behavior such as tension/compression only analysis or P-Delta analysis are required.
 
         :param log: Prints the analysis log to the console if set to True. Default is False.
@@ -2115,7 +2116,8 @@ class FEModel3D():
             from scipy.sparse.linalg import spsolve
 
         # Prepare the model for analysis
-        Analysis._prepare_model(self)
+        reset_nodes = not any((combo_tags , load_combos)) or reset_nodes
+        Analysis._prepare_model(self,reset_nodes=reset_nodes)
 
         # Get the auxiliary list used to determine how the matrices will be partitioned
         D1_indices, D2_indices, D2 = Analysis._partition_D(self)
@@ -2169,7 +2171,7 @@ class FEModel3D():
             Analysis._store_displacements(self, D1, D2, D1_indices, D2_indices, combo)
 
         # Calculate reactions
-        Analysis._calc_reactions(self, log, combo_tags)
+        Analysis._calc_reactions(self, log, combo_tags,load_combos)
 
         if log:
             print('')     
@@ -2178,12 +2180,12 @@ class FEModel3D():
 
         # Check statics if requested
         if check_statics == True:
-            Analysis._check_statics(self, combo_tags)
+            Analysis._check_statics(self, combo_tags,load_combos)
         
         # Flag the model as solved
         self.solution = 'Linear'
 
-    def analyze_PDelta(self, log=False, check_stability=True, max_iter=30, sparse=True, combo_tags:list=None,load_combos:list=None):
+    def analyze_PDelta(self, log=False, check_stability=True, max_iter=30, sparse=True, combo_tags:list=None,load_combos:list=None,reset_nodes=False):
         """Performs second order (P-Delta) analysis. This type of analysis is appropriate for most models using beams, columns and braces. Second order analysis is usually required by material specific codes. The analysis is iterative and takes longer to solve. Models with slender members and/or members with combined bending and axial loads will generally have more significant P-Delta effects. P-Delta effects in plates/quads are not considered.
 
         :param log: Prints updates to the console if set to True. Default is False.
@@ -2208,7 +2210,8 @@ class FEModel3D():
             from scipy.sparse.linalg import spsolve
 
         # Prepare the model for analysis
-        Analysis._prepare_model(self)
+        reset_nodes = not any((combo_tags , load_combos)) or reset_nodes
+        Analysis._prepare_model(self,reset_nodes=reset_nodes)
         
         # Get the auxiliary list used to determine how the matrices will be partitioned
         D1_indices, D2_indices, D2 = Analysis._partition_D(self)
@@ -2229,7 +2232,7 @@ class FEModel3D():
             Analysis._PDelta_step(self, combo.name, P1, FER1, D1_indices, D2_indices, D2, log, sparse, check_stability, max_iter, True)
         
         # Calculate reactions
-        Analysis._calc_reactions(self, log, combo_tags)
+        Analysis._calc_reactions(self, log, combo_tags,load_combos)
 
         if log:
             print('')
@@ -2239,7 +2242,7 @@ class FEModel3D():
         # Flag the model as solved
         self.solution = 'P-Delta'
     
-    def _not_ready_yet_analyze_pushover(self, log=False, check_stability=True, push_combo='Push', max_iter=30, tol=0.01, sparse=True, combo_tags:list=None,load_combos:list=None):
+    def _not_ready_yet_analyze_pushover(self, log=False, check_stability=True, push_combo='Push', max_iter=30, tol=0.01, sparse=True, combo_tags:list=None,load_combos:list=None,reset_nodes=False):
 
         if log:
             print('+---------------------+')
@@ -2251,7 +2254,8 @@ class FEModel3D():
             from scipy.sparse.linalg import spsolve
 
         # Prepare the model for analysis
-        Analysis._prepare_model(self)
+        reset_nodes = not any((combo_tags , load_combos)) or reset_nodes
+        Analysis._prepare_model(self,reset_nodes=reset_nodes)
         
         # Get the auxiliary list used to determine how the matrices will be partitioned
         D1_indices, D2_indices, D2 = Analysis._partition_D(self)
@@ -2338,7 +2342,8 @@ class FEModel3D():
                 step_num += 1
 
         # Calculate reactions for every primary load combination
-        Analysis._calc_reactions(self, log, combo_tags=['primary'])
+        combo_tags=['primary']
+        Analysis._calc_reactions(self, log,combo_tags,load_combos)
 
         if log:
             print('')

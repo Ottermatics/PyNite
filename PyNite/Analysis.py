@@ -3,7 +3,7 @@ from PyNite.LoadCombo import LoadCombo
 from numpy import array, atleast_2d, zeros, subtract, matmul, divide, seterr, nanmax
 from PyNite.Solvers import solve
 
-def _prepare_model(model):
+def _prepare_model(model,reset_nodes=True):
     """Prepares a model for analysis by ensuring at least one load combination is defined, generating all meshes that have not already been generated, activating all non-linear members, and internally numbering all nodes and elements.
 
     :param model: The model being prepared for analysis.
@@ -11,14 +11,15 @@ def _prepare_model(model):
     """
     
     # Reset any nodal displacements
-    model._D = {}
-    for node in model.Nodes.values():
-        node.DX = {}
-        node.DY = {}
-        node.DZ = {}
-        node.RX = {}
-        node.RY = {}
-        node.RZ = {}
+    if reset_nodes:
+        model._D = {}
+        for node in model.Nodes.values():
+            node.DX = {}
+            node.DY = {}
+            node.DZ = {}
+            node.RX = {}
+            node.RY = {}
+            node.RZ = {}
 
     # Ensure there is at least 1 load combination to solve if the user didn't define any
     if model.LoadCombos == {}:
@@ -50,12 +51,14 @@ def _identify_combos(model, combo_tags:list=None,load_combos:list=None):
     :type model: FEModel3D
     :param combo_tags: A list of tags used for the load combinations to be evaluated. Defaults to `None` in which case all load combinations will be added to the list of load combinations to be run.
     :type combo_tags: list, optional
+    :param load_combos: A list of load combination names to be evaluated. Defaults to `None` in which case all load combinations will be added to the list of load combinations to be run, unless `combo_tags` is not `None`.
+    :type load_combos: list, optional
     :return: A list containing the load combinations to be analyzed.
     :rtype: list
     """
     
     # Identify which load combinations to evaluate
-    if combo_tags is None:
+    if combo_tags is None and load_combos is None:
         # Evaluate all load combinations if not tags have been provided
         combo_list = model.LoadCombos.values()
     else:
@@ -63,12 +66,12 @@ def _identify_combos(model, combo_tags:list=None,load_combos:list=None):
         combo_list = []
         # Step through each load combination in the model
         for combo in model.LoadCombos.values():
-            # Check if this load combination is tagged with any of the tags we're looking for
+            # Check if this load combination is tagged with any of the tags we're looking for or if it is named in the list of load combinations to be evaluated
             if combo.combo_tags is not None and any(tag in combo.combo_tags for tag in combo_tags):
                 # Add the load combination to the list of load combinations to be evaluated
                 combo_list.append(combo)
             
-            elif combo.name in load_combos:
+            elif load_combos is not None and combo.name in load_combos:
                 # Add the load combination by its name to the list of load combinations to be evaluated
                 combo_list.append(combo)
     
@@ -878,7 +881,7 @@ def _calc_reactions(model, log=False, combo_tags:list=None,load_combos:list=None
                 RZ = node.RZ[combo.name]
                 node.RxnMZ[combo.name] += k*RZ
 
-def _check_statics(model, combo_tags=None):
+def _check_statics(model, combo_tags=None,load_combos:list=None):
     '''
     Checks static equilibrium and prints results to the console.
 
@@ -899,14 +902,8 @@ def _check_statics(model, combo_tags=None):
     statics_table = PrettyTable()
     statics_table.field_names = ['Load Combination', 'Sum FX', 'Sum RX', 'Sum FY', 'Sum RY', 'Sum FZ', 'Sum RZ', 'Sum MX', 'Sum RMX', 'Sum MY', 'Sum RMY', 'Sum MZ', 'Sum RMZ']
 
-    # Identify which load combinations to evaluate
-    if combo_tags is None:
-        combo_list = model.LoadCombos.values()
-    else:
-        combo_list = []
-        for combo in model.LoadCombos.values():
-            if any(tag in combo.combo_tags for tag in combo_tags):
-                combo_list.append(combo)
+    #Determine which combos to run
+    combo_list = _identify_combos(model, combo_tags,load_combos)
 
     # Step through each load combination
     for combo in combo_list:
