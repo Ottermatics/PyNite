@@ -67,7 +67,7 @@ def _identify_combos(model, combo_tags:list=None,load_combos:list=None):
         # Step through each load combination in the model
         for combo in model.LoadCombos.values():
             # Check if this load combination is tagged with any of the tags we're looking for or if it is named in the list of load combinations to be evaluated
-            if combo.combo_tags is not None and any(tag in combo.combo_tags for tag in combo_tags):
+            if combo_tags is not None and combo.combo_tags is not None and any(tag in combo.combo_tags for tag in combo_tags):
                 # Add the load combination to the list of load combinations to be evaluated
                 combo_list.append(combo)
             
