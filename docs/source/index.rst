@@ -25,7 +25,11 @@ This documentation is just getting started and is a little bare at the moment. K
    load_combo
    node
    member
+   plate
+   analysis
    stability
+   PDelta
+   rendering
    reporting
 
 Indices and tables

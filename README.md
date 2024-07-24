@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/JWock82/PyNite/raw/master/Resources/Full Logo No Buffer.png" width=40% align="center"/>
+  <img src="https://github.com/JWock82/PyNite/raw/main/Resources/Full Logo No Buffer.png" width=40% align="center"/>
   <br>
   <h1>Simple Finite Element Analysis in Python</h1>
 </div>
@@ -61,60 +61,26 @@ Here's a list of projects that use PyNite:
 * Phaenotyp (https://github.com/bewegende-Architektur/Phaenotyp) (https://youtu.be/shloSw9HjVI)
 
 # What's New?
-v0.0.78
-* Corrections to tension/compression only support springs. v0.0.76 and v0.0.77 were not working as expected. 3rd time's a charm.
+v0.0.95
+* Bug fix for rendering negative point loads via `Pyvista`. They were being rendered as positive loads. The analysis was not impacted by this bug.
 
-v0.0.77
-* Simplified P-Delta convergence checks
-* Fixed P-Delta bug introduced in v0.0.76
-  
-v0.0.76
-* Simplified P-Delta convergence checks
-* Allowed tension/compression-only support springs to reactivate after being deactivated. Erroneous deflections were being reported on very flexible models that experienced a lot of movement with T/C support springs.
-* `matplotlib` is now an optional dependency. You'll only need to install it if you want to view plots for members.
-* Documentation for installation has been improved.
+v0.0.94
+* Added rendering via `Pyvista`. This greatly simplified the rendering code and provided a fresh look to the rendereings. Renderings in jupyter are now interactive. Global axes are also now shown in rendereings. To use `Pyvista` instead of `VTK`, use the new `Rendering` library rather than the old `Visualization` library. Rendering via `VTK` directly is still available.
+* Bug fix for member self-weight. The program was throwing exceptions instead of calculating member self-weight. Added a unit test to help prevent this issue from occuring again as code changes.
+* Refactored `material` to be `material_name` in the code. The prior naming convention caused confusion which led to the self-weight bug.
 
-v0.0.75
-* Bug fix & improvements for PDF printing capabilities. Methods used to print PDF's had fallen behind updates to the rest of the program. It should be fixed now. The way PDF's are printed has changed slightly. Examples have been updated to demonstrate this and the documentation on readthedocs has been updated as well: (https://pynite.readthedocs.io/en/latest/reporting.html).
+v0.0.93
+* Fixed phantom reactions showing up at unsupported nodes. If there was a support defined at a node, the program was summing reactions for all directions at the node, rather than just the supported directions. This caused the program to report "extra" reaction directions at any supported node (if the user queried them). Element forces/stresses were not affected as this was a post-processing reaction summing issue. Reactions for supported directions were summed correctly, except in the case of nodes with both spring supports and other supports. Only unsupported directions, and nodes with both spring supports and other supports, were showing phantom reactions. This bug also caused statics checks to fail from time to time.
+* Reorganized physical member code to match member code more consistently.
 
-v0.0.74
-* Bug fix for rectangular meshes with very close control points. The program now checks for mesh
-control points that are for all practical purposes the same and eliminates the duplicates.
+v0.0.92
+* Added member self-weight calculations via `FEModel3D.add_member_self_weight()`. This only applies to members. This feature does not calculate self-weight for plate and quad elements.
 
-v0.0.73
-* Bug fix for merging duplicated plate names when using models with multiple meshes.
+v0.0.89-0.0.91
+* Migrating visualizaton code from VTK to PyVista. PyVista greatly simplifies the rendering code, and simplifies adding new features to the renderings. This feature is only partially complete and partially functional.
 
-v0.0.72
-* Bug fix for point loads at the ends of physical members. These point loads were erroneously being applied at the end of all segments of the physical member. This error was introduced with the new physical member feature late last year. Prior to that this error did not exist.
-* Improvements to plate meshing: (1) Rectangular meshes now automatically renumber nodes and elements to avoid duplicating names that are already in the model. This feature is only available for rectangular meshes at the moment. For other types of meshes you'll need to manually specify the start node and start element for numbering. (2) Meshes also now automatically stay in sync with the model. A node moved in the model will automatically reflect back on the mesh. Changes to elements in the model will automatically be reflected in the mesh. The program used to lose track of this. Once the mesh was generated it was "one and done" and no more.
+v0.0.88
+* Reorganized physical member code to match member code more consistently.
 
-v0.0.71
-* WARNING: This version will require reworking your models to incorporate `Materials`. Be prepared to rework your models before you upgrade. The examples have all been updated to show you how to do this.
-* Added `Material` definitions. This does not change Pynite's behavior much, but it prepares the way for future features.
-* Greatly simplified the process of meshing plates/quads. Meshes can now be generated directly from the `FEModel3D` object.
-* Added data types to the many dictionaries storing data in the `FEModel3D` object. Most development environments will now offer hints when using these dictionaries directly. This makes accessing the results you're interested in more intuitive.
-* Simplified internal code for finding unique names for objects.
-
-v0.0.70
-* Array output of member force diagrams and displacement diagrams has been added.
-
-v0.0.69
-* Bug fix for rotational springs. Exceptions were being thrown due to an inconsistent variable name.
-* Cleared out old branches from the repository that were no longer being used.
-* Updated CI to check against python 3.10 and 3.11. Removed CI for python 3.6 as it's no longer supported by the latest version of github actions.
-* Subtle changes to the logo to make it look a little more "pythonic".
-* Bug fix for rendering screenshots. The ability to interact with the render window was being disabled after the first screenshot had been taken, forcing subsequent screenshots to use the same view as the first one.
-
-v0.0.68
-* Bug fix for member distributed loads on physical members. Added a unit test to check for this error going forward. This bug only affected physical members (new as of v0.0.67) that had distributed loads and internal nodes.
-
-v0.0.67
-* Added physical members. Members now automatically detect internal nodes and subdivide themselves and their loads.
-* Refactoring: deprecated old method names for member results. You may now have some errors show up if you still try to get member results using the old method names.
-* Bug fix for P-Delta analysis. Global displacements were correct, but member internal forces were neglecting the geometric stiffness matrix. The impact of this bug was minimal, since the strain induced by correct global displacements was still being considered prior to this update. You should see a slight change to member P-Delta results.
-* Code simplification for P-Delta analysis.
-
-v0.0.66
-* Code simplification and bug fix for merging duplicate nodes.
-* When nodes are merged, support conditions for the deleted node are now assigned to the remaining node.
-* Added a linear solver for faster analysis of simple models. If you don't need P-Delta analysis or tension/compression-only analysis this solver saves time by only assembling the global stiffness matrix once.
+v0.0.87
+* Fine-tuned P-$\delta$ effects. P-$\delta$ effects are now included in member internal slope and deflection calculations.

@@ -10,10 +10,10 @@ class Mesh():
     A parent class for meshes to inherit from.
     """
 
-    def __init__(self, thickness, material, model, kx_mod=1, ky_mod=1, start_node='N1', start_element='Q1'):
+    def __init__(self, thickness, material_name, model, kx_mod=1, ky_mod=1, start_node='N1', start_element='Q1'):
 
         self.thickness = thickness          # Thickness
-        self.material = material            # The name of the element material
+        self.material_name = material_name            # The name of the element material
         self.model = model                  # Meshes need a link to the model they belong to
         self.kx_mod = kx_mod                # Local x stiffness modification factor for elements in the mesh
         self.ky_mod = ky_mod                # Local y stiffness modification factor for elements in the mesh
@@ -135,11 +135,11 @@ class Mesh():
                 xm, ym = 1, 1
                 xn, yn = -1, 1
 
-            # Step through each load combination the element utilizes
-            for load_combo in element.LoadCombos.values():
+            # Step through each load combination in the model
+            for load_combo in self.model.LoadCombos.values():
 
                 # Determine if this load combination should be evaluated
-                if combo == None or load_combo.name == combo:
+                if combo is None or load_combo.name == combo:
                     
                     # Find the maximum shear in the element, checking each corner and the center
                     # of the element
@@ -202,10 +202,10 @@ class Mesh():
                 xn, yn = -1, 1
 
             # Step through each load combination the element utilizes
-            for load_combo in element.LoadCombos.values():
+            for load_combo in self.model.LoadCombos.values():
 
                 # Determine if this load combination should be evaluated
-                if combo == None or load_combo.name == combo:
+                if combo is None or load_combo.name == combo:
                     
                     # Find the minimum shear in the element, checking each corner and the center
                     # of the element
@@ -270,10 +270,10 @@ class Mesh():
                 xn, yn = -1, 1
 
             # Step through each load combination the element utilizes
-            for load_combo in element.LoadCombos.values():
+            for load_combo in self.model.LoadCombos.values():
 
                 # Determine if this load combination should be evaluated
-                if combo == None or load_combo.name == combo:
+                if combo is None or load_combo.name == combo:
                     
                     # Find the maximum moment in the element, checking each corner and the center
                     # of the element
@@ -338,10 +338,10 @@ class Mesh():
                 xn, yn = -1, 1
 
             # Step through each load combination the element utilizes
-            for load_combo in element.LoadCombos.values():
+            for load_combo in self.model.LoadCombos.values():
 
                 # Determine if this load combination should be evaluated
-                if combo == None or load_combo.name == combo:
+                if combo is None or load_combo.name == combo:
                     
                     # Find the minimum moment in the element, checking each corner and the center
                     # of the element
@@ -362,7 +362,7 @@ class Mesh():
 #%%
 class RectangleMesh(Mesh):
 
-    def __init__(self, mesh_size, width, height, thickness, material, model, kx_mod=1, ky_mod=1, origin=[0, 0, 0], plane='XY', x_control=None, y_control=None, start_node='N1', start_element='Q1', element_type='Quad'):
+    def __init__(self, mesh_size, width, height, thickness, material_name, model, kx_mod=1, ky_mod=1, origin=[0, 0, 0], plane='XY', x_control=None, y_control=None, start_node='N1', start_element='Q1', element_type='Quad'):
         """
         A rectangular mesh of elements.
 
@@ -376,7 +376,7 @@ class RectangleMesh(Mesh):
             The overall height of the mesh measured along its local y-axis.
         thickness : number
             Element thickness.
-        material : string
+        material_name : string
             The name of the element material.
         model : FEModel3D
             The model the mesh belongs to.
@@ -410,7 +410,7 @@ class RectangleMesh(Mesh):
 
         """
         
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node, start_element)
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node, start_element)
         self.mesh_size = mesh_size
         self.width = width
         self.height = height
@@ -592,13 +592,13 @@ class RectangleMesh(Mesh):
                                                                    self.nodes['N' + str(j_node + node_offset)],
                                                                    self.nodes['N' + str(m_node + node_offset)],
                                                                    self.nodes['N' + str(n_node + node_offset)],
-                                                                   self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                                   self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             else:
                 self.elements[element_name] = Plate3D(element_name, self.nodes['N' + str(i_node + node_offset)],
                                                                     self.nodes['N' + str(j_node + node_offset)],
                                                                     self.nodes['N' + str(m_node + node_offset)],
                                                                     self.nodes['N' + str(n_node + node_offset)],
-                                                                    self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                                    self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
 
         # Initialize a list of nodes and associated elements that fall within opening boundaries
         # that will be deleted
@@ -766,10 +766,10 @@ class AnnulusMesh(Mesh):
     A mesh of quadrilaterals forming an annulus (a donut).
     """
 
-    def __init__(self, mesh_size, outer_radius, inner_radius, thickness, material, model, kx_mod=1,
+    def __init__(self, mesh_size, outer_radius, inner_radius, thickness, material_name, model, kx_mod=1,
         ky_mod=1, origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1'):
 
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node, start_element)
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node, start_element)
 
         self.inner_radius = inner_radius
         self.outer_radius = outer_radius
@@ -812,14 +812,14 @@ class AnnulusMesh(Mesh):
         
             # Create a mesh of nodes for the ring
             if transition == True:
-                ring = AnnulusTransRingMesh(r_inner + h_rad, r_inner, n_circ, self.thickness, self.material, self.model, self.kx_mod, self.ky_mod,
+                ring = AnnulusTransRingMesh(r_inner + h_rad, r_inner, n_circ, self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod,
                                             self.origin, self.axis, 'N' + str(n), 'Q' + str(q))
                 n += 3*n_circ
                 q += 4*n_circ
                 n_circ *= 3
                 self.num_quads_outer = n_circ
             else:
-                ring = AnnulusRingMesh(r_inner + h_rad, r_inner, n_circ, self.thickness, self.material, self.model, self.kx_mod, self.ky_mod, self.origin,
+                ring = AnnulusRingMesh(r_inner + h_rad, r_inner, n_circ, self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod, self.origin,
                                        self.axis, 'N' + str(n), 'Q' + str(q))
                 n += n_circ
                 q += n_circ
@@ -863,10 +863,10 @@ class AnnulusRingMesh(Mesh):
     A mesh of quadrilaterals forming an annular ring (a donut).
     """
 
-    def __init__(self, outer_radius, inner_radius, num_quads, thickness, material, model, kx_mod=1, ky_mod=1,
+    def __init__(self, outer_radius, inner_radius, num_quads, thickness, material_name, model, kx_mod=1, ky_mod=1,
                  origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1'):
 
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node=start_node,
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node=start_node,
                          start_element=start_element)
 
         self.inner_radius = inner_radius
@@ -966,7 +966,7 @@ class AnnulusRingMesh(Mesh):
                                                                self.nodes['N' + str(j_node + node_offset)],
                                                                self.nodes['N' + str(m_node + node_offset)],
                                                                self.nodes['N' + str(n_node + node_offset)],
-                                                               self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                               self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
 
         # Add the nodes and elements to the model
         for node in self.nodes.values():
@@ -989,7 +989,7 @@ class AnnulusTransRingMesh(Mesh):
     edge.
     """
 
-    def __init__(self, outer_radius, inner_radius, num_inner_quads, thickness, material, model,
+    def __init__(self, outer_radius, inner_radius, num_inner_quads, thickness, material_name, model,
                  kx_mod=1, ky_mod=1, origin=[0, 0, 0], axis='Y', start_node='N1',
                  start_element='Q1'):
         """
@@ -999,7 +999,7 @@ class AnnulusTransRingMesh(Mesh):
             A vector indicating the direction normal to the ring.
         """
 
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node=start_node,
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node=start_node,
                          start_element=start_element)
 
         self.inner_radius = inner_radius
@@ -1144,7 +1144,7 @@ class AnnulusTransRingMesh(Mesh):
                                                                self.nodes['N' + str(j_node + node_offset)],
                                                                self.nodes['N' + str(m_node + node_offset)],
                                                                self.nodes['N' + str(n_node + node_offset)],
-                                                               self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                               self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
 
         # Add the nodes and elements to the model
         for node in self.nodes.values():
@@ -1165,11 +1165,11 @@ class FrustrumMesh(AnnulusMesh):
     A mesh of quadrilaterals forming a frustrum (a cone intersected by a horizontal plane).
     """
 
-    def __init__(self, mesh_size, large_radius, small_radius, height, thickness, material, model, kx_mod=1, ky_mod=1,
+    def __init__(self, mesh_size, large_radius, small_radius, height, thickness, material_name, model, kx_mod=1, ky_mod=1,
                  origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1'):
         
         # Create an annulus mesh
-        super().__init__(mesh_size, large_radius, small_radius, thickness, material, model, kx_mod,
+        super().__init__(mesh_size, large_radius, small_radius, thickness, material_name, model, kx_mod,
                          ky_mod, origin, axis, start_node, start_element)
         
         self.height = height
@@ -1203,12 +1203,12 @@ class CylinderMesh(Mesh):
     A mesh of quadrilaterals forming a cylinder.
 
     The mesh is formed with the local y-axis of the elements pointed toward
-    the base of the 
+    the base of the cylinder 
 
     Parameters
     ----------
     mesh_size : number
-        The desired mesh size. This value will only be used to mesh vertically if `num_elements` is
+        The desired mesh element edge size. This value will only be used to mesh vertically if `num_elements` is
         specified. Otherwise it will be used to mesh the circumference too.
     radius : number
         The radius of the cylinder to the element centers
@@ -1216,7 +1216,7 @@ class CylinderMesh(Mesh):
         Total height of the cylinder.
     thickness : number
         Element thickness.
-    material : string
+    material_name : string
         The name of the element material.
     kx_mod : number
         Stiffness modification factor for in-plane stiffness in the element's local
@@ -1240,36 +1240,41 @@ class CylinderMesh(Mesh):
         The type of element to use for the mesh: 'Quad' or 'Rect'
     """
 
-    def __init__(self, mesh_size, radius, height, thickness, material, model, kx_mod=1, ky_mod=1,
-                 origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1',
-                 num_elements=None, element_type='Quad'):
+    def __init__(self, mesh_size, radius, height, thickness, material_name, model, kx_mod=1, ky_mod=1,origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1', num_elements=None, element_type='Quad'):
 
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node, start_element)
+        # Inherit properties and methods from the parent `Mesh` class
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node, start_element)
 
+        # Define a few new additional class properties related to cylinders
         self.radius = radius
         self.h = height
         self.mesh_size = mesh_size
-
-        if num_elements == None:
-            self.num_elements = int(round(2*pi*radius/mesh_size, 0))
-        else:
-            self.num_elements = num_elements
-        
         self.origin = origin
         self.axis = axis
 
+        # Check if the user has requested a specific number of elements for each course of plates. This can be useful for ensuring the mesh matches up with other meshes.
+        if num_elements == None:
+            # Calculate the number of elements if the user hasn't specified
+            self.num_elements = int(round(2*pi*radius/mesh_size, 0))
+        else:
+            # Use the user specified number of elements
+            self.num_elements = num_elements
+
+        # Check which type of element the user has requested (rectangular plate or quad)
         self.element_type = element_type
 
+        # Generate the mesh
         self.generate()
     
     def generate(self):
         
+        # Get the mesh thickness and the material name
         thickness = self.thickness
-        material = self.material
+        material_name = self.material_name
 
         mesh_size = self.mesh_size  # Desired mesh size
-        num_elements = self.num_elements  # Number of quadrilaterals in the ring
-        n = self.num_elements
+        num_elements = self.num_elements  # Number of quadrilaterals in each course of the ring
+        n = self.num_elements  # Total number of elements in the mesh (initialized for a single ring at the moment)
 
         radius = self.radius
         h = self.h
@@ -1300,31 +1305,23 @@ class CylinderMesh(Mesh):
             h_y = height/n_vert             # Element height in the vertical direction
             # Create a mesh of nodes for the ring
             if self.axis == 'Y':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, y, 0],
-                                        self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [0, y, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
             elif self.axis == 'X':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [y, 0, 0],
-                                        self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [y, 0, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
             elif self.axis == 'Z':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, 0, y],
-                                        self.axis, 'N' + str(n), 'Q' + str(q), element_type)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [0, 0, y], self.axis, 'N' + str(n), 'Q' + str(q), element_type)
 
             n += num_elements
             q += num_elements
         
-            # Add the newly generated nodes and elements to the overall mesh. Note that if duplicate
-            # keys exist, the `.update()` method will overwrite them with the newly generated key value
-            # pairs. This works in our favor by automatically eliminating duplicate nodes at the shared
-            # boundaries between rings.
+            # Add the newly generated nodes and elements to the overall mesh. Note that if duplicate keys exist, the `.update()` method will overwrite them with the newly generated key value pairs. This works in our favor by automatically eliminating duplicate nodes at the shared boundaries between rings.
             self.nodes.update(ring.nodes)
             self.elements.update(ring.elements)
 
             # Prepare to move to the next ring
             y += h_y
         
-        # After calling the `.update()` method some elements are still attached to the duplicate
-        # nodes that are no longer in the dictionary. Attach these plates to the nodes that are
-        # still in the dictionary instead. 
+        # After calling the `.update()` method some elements are still attached to the duplicate nodes that are no longer in the dictionary. Attach these plates to the nodes that are still in the dictionary instead. 
         for element in self.elements.values():
             element.i_node = self.nodes[element.i_node.name]
             element.j_node = self.nodes[element.j_node.name]
@@ -1359,7 +1356,7 @@ class CylinderRingMesh(Mesh):
         Number of elements used to generate the cylindrical ring.
     thickness : number
         Element thickness.
-    material : string
+    material_name : string
         The name of the element material.
     kx_mod : number
         Stiffness modification factor for in-plane stiffness in the element's local
@@ -1384,11 +1381,11 @@ class CylinderRingMesh(Mesh):
     
     """
 
-    def __init__(self, radius, height, num_elements, thickness, material, model, kx_mod=1, ky_mod=1,
+    def __init__(self, radius, height, num_elements, thickness, material_name, model, kx_mod=1, ky_mod=1,
                  origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1',
                  element_type='Quad'):
 
-        super().__init__(thickness, material, model, kx_mod, ky_mod, start_node=start_node, start_element=start_element)
+        super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node=start_node, start_element=start_element)
 
         self.radius = radius
         self.height = height
@@ -1506,13 +1503,13 @@ class CylinderRingMesh(Mesh):
                                                      self.nodes['N' + str(j_node + node_offset)],
                                                      self.nodes['N' + str(m_node + node_offset)],
                                                      self.nodes['N' + str(n_node + node_offset)],
-                                                     self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                     self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             elif self.element_type == 'Rect':
                 self.elements[element_name] = Plate3D(element_name, self.nodes['N' + str(i_node + node_offset)],
                                                       self.nodes['N' + str(j_node + node_offset)],
                                                       self.nodes['N' + str(m_node + node_offset)],
                                                       self.nodes['N' + str(n_node + node_offset)],
-                                                      self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                                      self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
         
         # Add the nodes and elements to the model
         for node in self.nodes.values():
