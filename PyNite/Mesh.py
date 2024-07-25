@@ -615,13 +615,13 @@ class RectangleMesh(Mesh):
                                         self.nodes[j_node],
                                         self.nodes[m_node],
                                         self.nodes[n_node],
-                                        self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                        self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             else:
                 q = Plate3D(element_name, self.nodes[i_node],
                                         self.nodes[j_node],
                                         self.nodes[m_node],
                                         self.nodes[n_node],
-                                        self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                        self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             self.elements[element_name] = q
 
         # Initialize a list of nodes and associated elements that fall within opening boundaries
@@ -934,7 +934,7 @@ class AnnulusRingMesh(Mesh):
     A mesh of quadrilaterals forming an annular ring (a donut).
     """
 
-    def __init__(self, outer_radius, inner_radius, num_quads, thickness, material, model, kx_mod=1, ky_mod=1,
+    def __init__(self, outer_radius, inner_radius, num_quads, thickness, material_name, model, kx_mod=1, ky_mod=1,
                  origin=[0, 0, 0], axis='Y', start_node='N1', start_element='Q1',angle_offset=None):
 
         super().__init__(thickness, material_name, model, kx_mod, ky_mod, start_node=start_node,
@@ -1043,7 +1043,7 @@ class AnnulusRingMesh(Mesh):
                                     self.nodes[j_node],
                                     self.nodes[m_node],
                                     self.nodes[n_node],
-                                    self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                    self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
 
             self.elements[element_name] = q
 
@@ -1232,7 +1232,7 @@ class AnnulusTransRingMesh(Mesh):
                                 self.nodes[j_node],
                                 self.nodes[m_node],
                                 self.nodes[n_node],
-                                self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                                self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
 
             self.elements[element_name] = q
 
@@ -1400,11 +1400,11 @@ class CylinderMesh(Mesh):
             h_y = height/n_vert             # Element height in the vertical direction
             # Create a mesh of nodes for the ring
             if self.axis == 'Y':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, y, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [0, y, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
             elif self.axis == 'X':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [y, 0, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [y, 0, 0], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
             elif self.axis == 'Z':
-                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material, self.model, 1, 1, [0, 0, y], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
+                ring = CylinderRingMesh(radius, h_y, num_elements, thickness, material_name, self.model, 1, 1, [0, 0, y], self.axis, 'N' + str(n), 'Q' + str(q), element_type,angle_offset=self.angle_offset)
 
             n += num_elements
             q += num_elements
@@ -1606,13 +1606,13 @@ class CylinderRingMesh(Mesh):
                             self.nodes[j_node],
                             self.nodes[m_node],
                             self.nodes[n_node],
-                            self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                            self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             elif self.element_type == 'Rect':
                 q = Plate3D(element_name, self.nodes[i_node],
                             self.nodes[j_node],
                             self.nodes[m_node],
                             self.nodes[n_node],
-                            self.thickness, self.material, self.model, self.kx_mod, self.ky_mod)
+                            self.thickness, self.material_name, self.model, self.kx_mod, self.ky_mod)
             #Add the element to the mesh
             self.elements[element_name] = q
         
