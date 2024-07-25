@@ -574,8 +574,8 @@ class RectangleMesh(Mesh):
                         x += b
 
                         # Move to the next node number
-                        node_num += 1
                         nodes[node_num] = node_name
+                        node_num += 1
 
                 # Move to the next y coordinate
                 y += h
