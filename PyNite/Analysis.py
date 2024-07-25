@@ -28,7 +28,7 @@ def _prepare_model(model,reset_nodes=True):
     
     # Generate all meshes
     for mesh in model.Meshes.values():
-        if mesh.is_generated == False:
+        if mesh.is_generated() == False:
             mesh.generate()
 
     # Activate all springs and members for all load combinations
@@ -1120,6 +1120,9 @@ def _renumber(model):
     assigned according to the order in which they occur in each dictionary.
     """
     
+    #always take care of this
+    model.merge_duplicate_nodes()
+
     # Number each node in the model
     for id, node in enumerate(model.Nodes.values()):
         node.ID = id
